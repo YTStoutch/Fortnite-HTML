@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Fortnite 3D Prototype</title>
+  <title>Mini-Fortnite 3D</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; }
     canvas { display: block; }
@@ -19,13 +19,27 @@
       border: 2px solid white;
       touch-action: none;
     }
+
+    /* Bouton tir */
+    #shoot {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: rgba(255,0,0,0.5);
+      color: white;
+      font-size: 18px;
+      border: none;
+    }
   </style>
 </head>
 <body>
 
 <div id="joystick"></div>
+<button id="shoot">TIR</button>
 
-<!-- Three.js -->
 <script src="https://unpkg.com/three@0.152.0/build/three.min.js"></script>
 
 <script>
@@ -38,19 +52,31 @@
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
+  // ----- Lumière -----
+  const light = new THREE.DirectionalLight(0xffffff,1);
+  light.position.set(10,20,10);
+  scene.add(light);
+
   // ----- Sol -----
-  const groundGeo = new THREE.PlaneGeometry(500, 500);
-  const groundMat = new THREE.MeshPhongMaterial({ color: 0x228B22 });
+  const groundGeo = new THREE.PlaneGeometry(500,500);
+  const groundMat = new THREE.MeshPhongMaterial({color:0x228B22});
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI/2;
   scene.add(ground);
 
-  // ----- Joueur -----
+  // ----- Joueur (cube rouge) -----
   const playerGeo = new THREE.BoxGeometry(1,2,1);
   const playerMat = new THREE.MeshPhongMaterial({color:0xff0000});
   const player = new THREE.Mesh(playerGeo, playerMat);
   player.position.y = 1;
   scene.add(player);
+
+  // ----- Arme du joueur -----
+  const gunGeo = new THREE.BoxGeometry(0.2,0.2,1);
+  const gunMat = new THREE.MeshPhongMaterial({color:0x0000ff});
+  const gun = new THREE.Mesh(gunGeo, gunMat);
+  gun.position.set(0.5,1.2,-0.5);
+  player.add(gun);
 
   // ----- Coffre -----
   const chestGeo = new THREE.BoxGeometry(2,1.5,2);
@@ -58,13 +84,7 @@
   const chest = new THREE.Mesh(chestGeo, chestMat);
   chest.position.set(6,0.75,-6);
   scene.add(chest);
-
   let chestOpened = false;
-
-  // ----- Lumière -----
-  const light = new THREE.DirectionalLight(0xffffff,1);
-  light.position.set(10,20,10);
-  scene.add(light);
 
   // ----- Clavier -----
   const keys = {};
@@ -77,15 +97,13 @@
     gamepad = navigator.getGamepads()[e.gamepad.index];
     console.log("🎮 Manette connectée :", e.gamepad.id);
   });
-  window.addEventListener("gamepaddisconnected", ()=>{
-    gamepad=null;
-    console.log("Manette déconnectée");
-  });
+  window.addEventListener("gamepaddisconnected", ()=>{ gamepad=null; });
+
   function handleGamepad(){
     if(!gamepad) return;
     let gp = navigator.getGamepads()[gamepad.index];
     let x = gp.axes[0], y = gp.axes[1];
-    let speed = 0.15;
+    const speed = 0.15;
     if(Math.abs(y)>0.2) player.position.z += y*speed;
     if(Math.abs(x)>0.2) player.position.x += x*speed;
   }
@@ -110,12 +128,19 @@
     joyX = x/max;
     joyY = y/max;
   });
+
   function handleMobile(){
     if(!isTouching) return;
-    const speed=0.15;
+    const speed = 0.15;
     player.position.x += joyX*speed;
     player.position.z += joyY*speed;
   }
+
+  // ----- Bouton Tir -----
+  document.getElementById("shoot").addEventListener("click", ()=>{
+    console.log("💥 Tir déclenché !");
+    alert("💥 Tir !");
+  });
 
   // ----- Coffre -----
   function checkChest(){
@@ -132,26 +157,33 @@
 
   // ----- Animation -----
   camera.position.set(0,5,10);
+
   function animate(){
     requestAnimationFrame(animate);
-    const speed=0.12;
+
+    const speed = 0.12;
     if(keys["z"]) player.position.z -= speed;
     if(keys["s"]) player.position.z += speed;
     if(keys["q"]) player.position.x -= speed;
     if(keys["d"]) player.position.x += speed;
+
     handleGamepad();
     handleMobile();
     checkChest();
 
+    // Caméra 3ème personne
     camera.position.x = player.position.x;
+    camera.position.y = player.position.y + 5;
     camera.position.z = player.position.z + 10;
     camera.lookAt(player.position);
 
     renderer.render(scene,camera);
   }
+
   animate();
 </script>
 
 </body>
 </html>
+
 
