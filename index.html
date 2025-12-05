@@ -1,189 +1,76 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Mini-Fortnite 3D</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; }
-    canvas { display: block; }
-
-    /* Joystick mobile */
-    #joystick {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.1);
-      border: 2px solid white;
-      touch-action: none;
-    }
-
-    /* Bouton tir */
-    #shoot {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      background: rgba(255,0,0,0.5);
-      color: white;
-      font-size: 18px;
-      border: none;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Mini-Fortnite Multijoueur</title>
+<style>body{margin:0;overflow:hidden;}canvas{display:block;}</style>
+<script src="https://unpkg.com/three@0.152.0/build/three.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-
-<div id="joystick"></div>
-<button id="shoot">TIR</button>
-
-<script src="https://unpkg.com/three@0.152.0/build/three.min.js"></script>
-
 <script>
-  // ----- Scène, caméra, rendu -----
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87ceeb);
+// Socket.io
+const socket = io();
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-  const renderer = new THREE.WebGLRenderer({antialias:true});
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+// Joueur local
+let player = {x:0,y:0,z:0,rotationY:0};
+let allPlayers = {};
 
-  // ----- Lumière -----
-  const light = new THREE.DirectionalLight(0xffffff,1);
-  light.position.set(10,20,10);
-  scene.add(light);
+// Recevoir positions des joueurs
+socket.on('playersUpdate', data => { allPlayers = data; });
 
-  // ----- Sol -----
-  const groundGeo = new THREE.PlaneGeometry(500,500);
-  const groundMat = new THREE.MeshPhongMaterial({color:0x228B22});
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI/2;
-  scene.add(ground);
+// Envoi régulier de la position locale
+setInterval(() => { socket.emit('updatePosition', player); }, 50);
 
-  // ----- Joueur (cube rouge) -----
-  const playerGeo = new THREE.BoxGeometry(1,2,1);
-  const playerMat = new THREE.MeshPhongMaterial({color:0xff0000});
-  const player = new THREE.Mesh(playerGeo, playerMat);
-  player.position.y = 1;
-  scene.add(player);
+// === Exemple minimal avec Three.js ===
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-  // ----- Arme du joueur -----
-  const gunGeo = new THREE.BoxGeometry(0.2,0.2,1);
-  const gunMat = new THREE.MeshPhongMaterial({color:0x0000ff});
-  const gun = new THREE.Mesh(gunGeo, gunMat);
-  gun.position.set(0.5,1.2,-0.5);
-  player.add(gun);
+// Lumière et sol
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(10,20,10);
+scene.add(light);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(500,500), new THREE.MeshPhongMaterial({color:0x228B22}));
+ground.rotation.x=-Math.PI/2; scene.add(ground);
 
-  // ----- Coffre -----
-  const chestGeo = new THREE.BoxGeometry(2,1.5,2);
-  const chestMat = new THREE.MeshPhongMaterial({color:0xffd700});
-  const chest = new THREE.Mesh(chestGeo, chestMat);
-  chest.position.set(6,0.75,-6);
-  scene.add(chest);
-  let chestOpened = false;
+// Joueur local
+const playerGeo = new THREE.BoxGeometry(1,2,1);
+const playerMat = new THREE.MeshPhongMaterial({color:0xff0000});
+const playerMesh = new THREE.Mesh(playerGeo, playerMat);
+playerMesh.position.y=1;
+scene.add(playerMesh);
 
-  // ----- Clavier -----
-  const keys = {};
-  document.addEventListener("keydown", e => keys[e.key]=true);
-  document.addEventListener("keyup", e => keys[e.key]=false);
+// Boucle d’animation
+camera.position.set(0,5,10);
+function animate(){
+  requestAnimationFrame(animate);
 
-  // ----- Manette -----
-  let gamepad = null;
-  window.addEventListener("gamepadconnected", e=>{
-    gamepad = navigator.getGamepads()[e.gamepad.index];
-    console.log("🎮 Manette connectée :", e.gamepad.id);
-  });
-  window.addEventListener("gamepaddisconnected", ()=>{ gamepad=null; });
+  // Mettre à jour la position du cube joueur
+  playerMesh.position.set(player.x, player.y, player.z);
 
-  function handleGamepad(){
-    if(!gamepad) return;
-    let gp = navigator.getGamepads()[gamepad.index];
-    let x = gp.axes[0], y = gp.axes[1];
-    const speed = 0.15;
-    if(Math.abs(y)>0.2) player.position.z += y*speed;
-    if(Math.abs(x)>0.2) player.position.x += x*speed;
-  }
-
-  // ----- Joystick mobile -----
-  const joystick = document.getElementById("joystick");
-  let joyX=0, joyY=0, isTouching=false;
-
-  joystick.addEventListener("touchstart", ()=>isTouching=true);
-  joystick.addEventListener("touchend", ()=>{
-    isTouching=false; joyX=0; joyY=0;
-  });
-  joystick.addEventListener("touchmove", e=>{
-    e.preventDefault();
-    const touch = e.touches[0];
-    const rect = joystick.getBoundingClientRect();
-    let x = touch.clientX - (rect.left + rect.width/2);
-    let y = touch.clientY - (rect.top + rect.height/2);
-    const max=40;
-    x=Math.max(-max,Math.min(max,x));
-    y=Math.max(-max,Math.min(max,y));
-    joyX = x/max;
-    joyY = y/max;
-  });
-
-  function handleMobile(){
-    if(!isTouching) return;
-    const speed = 0.15;
-    player.position.x += joyX*speed;
-    player.position.z += joyY*speed;
-  }
-
-  // ----- Bouton Tir -----
-  document.getElementById("shoot").addEventListener("click", ()=>{
-    console.log("💥 Tir déclenché !");
-    alert("💥 Tir !");
-  });
-
-  // ----- Coffre -----
-  function checkChest(){
-    if(chestOpened) return;
-    const dx = player.position.x - chest.position.x;
-    const dz = player.position.z - chest.position.z;
-    const dist = Math.sqrt(dx*dx + dz*dz);
-    if(dist<3){
-      chest.material.color.set(0xffffff);
-      chestOpened=true;
-      alert("🎉 Tu as ouvert un coffre ! Loot : AR Bleue");
+  // Afficher les autres joueurs
+  for(let id in allPlayers){
+    if(id === socket.id) continue; // ignore toi-même
+    let p = allPlayers[id];
+    if(!scene.getObjectByName(id)){
+      const otherGeo = new THREE.BoxGeometry(1,2,1);
+      const otherMat = new THREE.MeshPhongMaterial({color:0x00ff00});
+      const otherMesh = new THREE.Mesh(otherGeo, otherMat);
+      otherMesh.name = id;
+      otherMesh.position.set(p.x, p.y, p.z);
+      scene.add(otherMesh);
+    } else {
+      scene.getObjectByName(id).position.set(p.x,p.y,p.z);
     }
   }
 
-  // ----- Animation -----
-  camera.position.set(0,5,10);
-
-  function animate(){
-    requestAnimationFrame(animate);
-
-    const speed = 0.12;
-    if(keys["z"]) player.position.z -= speed;
-    if(keys["s"]) player.position.z += speed;
-    if(keys["q"]) player.position.x -= speed;
-    if(keys["d"]) player.position.x += speed;
-
-    handleGamepad();
-    handleMobile();
-    checkChest();
-
-    // Caméra 3ème personne
-    camera.position.x = player.position.x;
-    camera.position.y = player.position.y + 5;
-    camera.position.z = player.position.z + 10;
-    camera.lookAt(player.position);
-
-    renderer.render(scene,camera);
-  }
-
-  animate();
+  renderer.render(scene, camera);
+}
+animate();
 </script>
-
 </body>
 </html>
-
-
